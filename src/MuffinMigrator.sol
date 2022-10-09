@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.9;
-
-// Uncomment this line to use console.log
-// import "hardhat/console.sol";
+// SPDX-License-Identifier: GPL-3.0-only
+pragma solidity 0.8.17;
 
 import {IERC20Minimal} from "./interfaces/IERC20Minimal.sol";
 import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
@@ -51,6 +48,7 @@ contract MuffinMigrator {
         RemoveUniV3Params calldata removeParams,
         MintParams calldata mintParams
     ) external payable {
+        // permit self to access the uniswap v3 position
         uniV3PositionManager.permit(
             address(this),
             removeParams.tokenId,
@@ -59,6 +57,8 @@ contract MuffinMigrator {
             permitParams.r,
             permitParams.s
         );
+
+        // migrate
         migrateFromUniV3(removeParams, mintParams);
     }
 
