@@ -40,7 +40,7 @@ contract MuffinMigrator {
         uint256 amount1Min;
     }
 
-    constructor(address muffinManager_, address uniV3PositionManager_) payable {
+    constructor(address muffinManager_, address uniV3PositionManager_) {
         muffinManager = IManagerMinimal(muffinManager_);
         uniV3PositionManager = INonfungiblePositionManagerMinimal(uniV3PositionManager_);
     }
@@ -49,7 +49,7 @@ contract MuffinMigrator {
         PermitUniV3Params calldata permitParams,
         RemoveUniV3Params calldata removeParams,
         MintParams calldata mintParams
-    ) external payable {
+    ) external {
         // permit this contract to access the uniswap v3 position
         // also act as token owner validation
         uniV3PositionManager.permit(
