@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.17;
 
-import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
-import {INonfungiblePositionManagerMinimal} from "./interfaces/uniswap/INonfungiblePositionManagerMinimal.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
+import {INonfungiblePositionManagerMinimal} from "./interfaces/uniswap/INonfungiblePositionManagerMinimal.sol";
 
 contract MuffinMigrator {
     IManagerMinimal public immutable muffinManager;
@@ -45,12 +45,13 @@ contract MuffinMigrator {
         uniV3PositionManager = INonfungiblePositionManagerMinimal(uniV3PositionManager_);
     }
 
-    function migrateFromUniV3(
+    function migrateFromUniV3WithPermit(
         PermitUniV3Params calldata permitParams,
         RemoveUniV3Params calldata removeParams,
         MintParams calldata mintParams
     ) external payable {
-        // permit self to access the uniswap v3 position
+        // permit this contract to access the uniswap v3 position
+        // also act as token owner validation
         uniV3PositionManager.permit(
             address(this),
             removeParams.tokenId,
