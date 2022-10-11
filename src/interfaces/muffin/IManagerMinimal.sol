@@ -2,17 +2,6 @@
 pragma solidity ^0.8.0;
 
 interface IManagerMinimal {
-    /// @notice             Deposit tokens into hub's internal account
-    /// @dev                DO NOT deposit rebasing tokens or multiple-address tokens as it will cause loss of funds
-    /// @param recipient    Recipient of the token deposit
-    /// @param token        Token address
-    /// @param amount       Amount to deposit
-    function deposit(
-        address recipient,
-        address token,
-        uint256 amount
-    ) external payable;
-
     /// @notice             Create a pool for token0 and token1 if it hasn't been created
     /// @dev                DO NOT create pool with rebasing tokens or multiple-address tokens as it will cause loss of funds
     /// @param token0       Address of token0 of the pool
