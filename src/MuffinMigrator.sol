@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity 0.8.17;
 
-import {IERC20Minimal} from "./interfaces/IERC20Minimal.sol";
 import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
 import {INonfungiblePositionManagerMinimal} from "./interfaces/uniswap/INonfungiblePositionManagerMinimal.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract MuffinMigrator {
     IManagerMinimal public immutable muffinManager;
@@ -18,6 +19,7 @@ contract MuffinMigrator {
 
     struct RemoveUniV3Params {
         uint256 tokenId;
+        uint128 liquidity;
         uint256 amount0Min;
         uint256 amount1Min;
         uint256 deadline;
@@ -43,7 +45,7 @@ contract MuffinMigrator {
         uniV3PositionManager = INonfungiblePositionManagerMinimal(uniV3PositionManager_);
     }
 
-    function migrateFromUniV3WithPermit(
+    function migrateFromUniV3(
         PermitUniV3Params calldata permitParams,
         RemoveUniV3Params calldata removeParams,
         MintParams calldata mintParams
@@ -58,23 +60,15 @@ contract MuffinMigrator {
             permitParams.s
         );
 
-        // migrate
-        migrateFromUniV3(removeParams, mintParams);
-    }
-
-    function migrateFromUniV3(
-        RemoveUniV3Params calldata removeParams,
-        MintParams calldata mintParams
-    ) public payable {
         // get uniswap position info
-        (address token0, address token1, uint128 liquidity) = _getUniV3Position(removeParams.tokenId);
+        (address token0, address token1) = _getUniV3Position(removeParams.tokenId);
 
         // record the current balance of tokens
-        uint256 balance0 = IERC20Minimal(token0).balanceOf(address(this));
-        uint256 balance1 = IERC20Minimal(token1).balanceOf(address(this));
+        uint256 balance0 = ERC20(token0).balanceOf(address(this));
+        uint256 balance1 = ERC20(token1).balanceOf(address(this));
 
         // remove and collect uniswap v3 position
-        (uint256 amount0, uint256 amount1) = _removeAndCollectUniV3Position(removeParams, liquidity);
+        (uint256 amount0, uint256 amount1) = _removeAndCollectUniV3Position(removeParams);
 
         // allow muffin manager to use the tokens
         _approveTokenToMuffinManager(token0, amount0);
@@ -84,18 +78,18 @@ contract MuffinMigrator {
         _mintPosition(token0, token1, mintParams);
 
         // calculate the remaining tokens, need underflow check if over-used
-        balance0 = IERC20Minimal(token0).balanceOf(address(this)) - balance0;
-        balance1 = IERC20Minimal(token1).balanceOf(address(this)) - balance1;
+        balance0 = ERC20(token0).balanceOf(address(this)) - balance0;
+        balance1 = ERC20(token1).balanceOf(address(this)) - balance1;
 
-        // refund remaining tokens to recipient's muffin account
-        if (balance0 > 0) muffinManager.deposit(mintParams.recipient, token0, balance0);
-        if (balance1 > 0) muffinManager.deposit(mintParams.recipient, token1, balance1);
+        // refund remaining tokens to recipient's wallet
+        if (balance0 > 0) SafeTransferLib.safeTransfer(ERC20(token0), mintParams.recipient, balance0);
+        if (balance1 > 0) SafeTransferLib.safeTransfer(ERC20(token1), mintParams.recipient, balance1);
     }
 
     function _getUniV3Position(uint256 tokenId)
         internal
         view
-        returns (address token0, address token1, uint128 liquidity)
+        returns (address token0, address token1)
     {
         (
             ,
@@ -105,21 +99,21 @@ contract MuffinMigrator {
             ,
             ,
             ,
-            liquidity,
+            ,
             ,
             ,
             ,
         ) = uniV3PositionManager.positions(tokenId);
     }
 
-    function _removeAndCollectUniV3Position(RemoveUniV3Params calldata removeParams, uint128 liquidity)
+    function _removeAndCollectUniV3Position(RemoveUniV3Params calldata removeParams)
         internal
         returns (uint256 amount0, uint256 amount1)
     {
         uniV3PositionManager.decreaseLiquidity(
             INonfungiblePositionManagerMinimal.DecreaseLiquidityParams({
                 tokenId: removeParams.tokenId,
-                liquidity: liquidity,
+                liquidity: removeParams.liquidity,
                 amount0Min: removeParams.amount0Min,
                 amount1Min: removeParams.amount1Min,
                 deadline: removeParams.deadline
@@ -137,15 +131,16 @@ contract MuffinMigrator {
     }
 
     function _approveTokenToMuffinManager(address token, uint256 amount) internal {
-        uint256 allowance = IERC20Minimal(token).allowance(address(this), address(muffinManager));
+        uint256 allowance = ERC20(token).allowance(address(this), address(muffinManager));
         if (allowance >= amount) return;
 
         // revoke allowance before setting a new one
-        if (allowance != 0) IERC20Minimal(token).approve(address(muffinManager), 0);
+        if (allowance != 0) ERC20(token).approve(address(muffinManager), 0);
 
-        try IERC20Minimal(token).approve(address(muffinManager), type(uint256).max) {
+        try ERC20(token).approve(address(muffinManager), type(uint256).max) {
         } catch {
-            IERC20Minimal(token).approve(address(muffinManager), amount);
+            // if the token contract disallow approve max, approve the exact amount only
+            ERC20(token).approve(address(muffinManager), amount);
         }
     }
 
