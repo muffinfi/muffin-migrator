@@ -2,12 +2,14 @@
 pragma solidity 0.8.17;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
 import {INonfungiblePositionManagerMinimal} from "./interfaces/uniswap/INonfungiblePositionManagerMinimal.sol";
 
 contract MuffinMigrator is ReentrancyGuard {
+    address payable public immutable weth;
     IManagerMinimal public immutable muffinManager;
     INonfungiblePositionManagerMinimal public immutable uniV3PositionManager;
 
@@ -33,9 +35,15 @@ contract MuffinMigrator is ReentrancyGuard {
         address recipient;
     }
 
-    constructor(address muffinManager_, address uniV3PositionManager_) {
+    constructor(address payable weth_, address muffinManager_, address uniV3PositionManager_) {
+        weth = weth_;
         muffinManager = IManagerMinimal(muffinManager_);
         uniV3PositionManager = INonfungiblePositionManagerMinimal(uniV3PositionManager_);
+    }
+
+    // only receive from WETH contract for refund
+    receive() external payable {
+        require(weth == msg.sender, "WETH only");
     }
 
     /// @notice Migrate Uniswap V3 position to Muffin position
@@ -43,15 +51,18 @@ contract MuffinMigrator is ReentrancyGuard {
     /// i.e. fees are remaining inside the Uniswap's position.
     /// @param permitParams subset of paramenters for Uniswap's `NonfungiblePositionManager.permit`
     /// @param removeParams paramenters for Uniswap's `INonfungiblePositionManager.decreaseLiquidity`
-    /// @param mintParams needCreatePool indicate the need of creating new Muffin's pool.
-    /// needAddTier indicate the need of adding new fee tier to Muffin's pool.
+    /// @param mintParams needCreatePool indicate the need of creating new Muffin's pool,
+    /// the amount of both burnt tokens need to exceed certain amount for creation.
+    /// needAddTier indicate the need of adding new fee tier to the Muffin's pool,
+    /// the amount of both burnt tokens need to exceed certain amount for addition.
     /// sqrtPrice the sqrt price value for creating new Muffin's pool.
     /// sqrtGamma the sqrt gamma value for adding new fee tier.
     /// ...others are subset of paramenters for Muffin's `Manager.mint`
     function migrateFromUniV3WithPermit(
         PermitUniV3Params calldata permitParams,
         INonfungiblePositionManagerMinimal.DecreaseLiquidityParams calldata removeParams,
-        MintParams calldata mintParams
+        MintParams calldata mintParams,
+        bool refundAsETH
     ) external nonReentrant {
         // permit this contract to access the Uniswap V3 position
         // also act as token owner validation
@@ -86,8 +97,11 @@ contract MuffinMigrator is ReentrancyGuard {
         balance1 = ERC20(token1).balanceOf(address(this)) - balance1;
 
         // refund remaining tokens to recipient's wallet
-        if (balance0 > 0) SafeTransferLib.safeTransfer(ERC20(token0), mintParams.recipient, balance0);
-        if (balance1 > 0) SafeTransferLib.safeTransfer(ERC20(token1), mintParams.recipient, balance1);
+        _refund(token0, mintParams.recipient, balance0, refundAsETH);
+        _refund(token1, mintParams.recipient, balance1, refundAsETH);
+
+        // revoke position approval after migration
+        uniV3PositionManager.approve(address(0), removeParams.tokenId);
     }
 
     function _getUniV3PositionTokenPair(uint256 tokenId)
@@ -126,6 +140,8 @@ contract MuffinMigrator is ReentrancyGuard {
             INonfungiblePositionManagerMinimal.CollectParams({
                 tokenId: removeParams.tokenId,
                 recipient: address(this),
+                // Uniswap assumed all token balances < 2^128
+                // See https://github.com/Uniswap/v3-core/blob/main/bug-bounty.md#assumptions
                 amount0Max: uint128(burntAmount0),
                 amount1Max: uint128(burntAmount1)
             })
@@ -194,5 +210,15 @@ contract MuffinMigrator is ReentrancyGuard {
                 useAccount: false
             })
         );
+    }
+
+    function _refund(address token, address to, uint256 amount, bool refundAsETH) internal {
+        if (amount == 0) return;
+        if (token == weth && refundAsETH) {
+            WETH(weth).withdraw(amount);
+            SafeTransferLib.safeTransferETH(to, amount);
+            return;
+        }
+        SafeTransferLib.safeTransfer(ERC20(token), to, amount);
     }
 }
