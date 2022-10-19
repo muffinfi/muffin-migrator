@@ -100,9 +100,6 @@ contract MuffinMigrator is ReentrancyGuard {
         // refund remaining tokens to recipient's wallet
         _refund(token0, mintParams.recipient, balance0, refundAsETH);
         _refund(token1, mintParams.recipient, balance1, refundAsETH);
-
-        // revoke position approval after migration
-        uniV3PositionManager.approve(address(0), removeParams.tokenId);
     }
 
     function _getUniV3PositionTokenPair(uint256 tokenId)
