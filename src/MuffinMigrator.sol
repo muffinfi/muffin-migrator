@@ -9,7 +9,7 @@ import {IManagerMinimal} from "./interfaces/muffin/IManagerMinimal.sol";
 import {INonfungiblePositionManagerMinimal} from "./interfaces/uniswap/INonfungiblePositionManagerMinimal.sol";
 
 contract MuffinMigrator is ReentrancyGuard {
-    address payable public immutable weth;
+    address public immutable weth;
     IManagerMinimal public immutable muffinManager;
     INonfungiblePositionManagerMinimal public immutable uniV3PositionManager;
 
@@ -35,10 +35,10 @@ contract MuffinMigrator is ReentrancyGuard {
         address recipient;
     }
 
-    constructor(address payable weth_, address muffinManager_, address uniV3PositionManager_) {
-        weth = weth_;
+    constructor(address muffinManager_, address uniV3PositionManager_) {
         muffinManager = IManagerMinimal(muffinManager_);
         uniV3PositionManager = INonfungiblePositionManagerMinimal(uniV3PositionManager_);
+        weth = muffinManager.WETH9();
     }
 
     // only receive from WETH contract for refund
@@ -58,6 +58,7 @@ contract MuffinMigrator is ReentrancyGuard {
     /// sqrtPrice the sqrt price value for creating new Muffin's pool.
     /// sqrtGamma the sqrt gamma value for adding new fee tier.
     /// ...others are subset of paramenters for Muffin's `Manager.mint`
+    /// @param refundAsETH `true` for refund WETH as ETH
     function migrateFromUniV3WithPermit(
         PermitUniV3Params calldata permitParams,
         INonfungiblePositionManagerMinimal.DecreaseLiquidityParams calldata removeParams,
@@ -215,7 +216,7 @@ contract MuffinMigrator is ReentrancyGuard {
     function _refund(address token, address to, uint256 amount, bool refundAsETH) internal {
         if (amount == 0) return;
         if (token == weth && refundAsETH) {
-            WETH(weth).withdraw(amount);
+            WETH(payable(weth)).withdraw(amount);
             SafeTransferLib.safeTransferETH(to, amount);
             return;
         }
