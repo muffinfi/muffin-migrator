@@ -31,6 +31,12 @@
 - You should only deposit liquidity into Muffin at a price you believe is correct.<br>
   If the price seems incorrect, you can either make a swap to move the price or wait for someone else to do so.
 
+## Deployed address
+
+- mainnet: [0xA74Cc5c431531Bf2601250C52825dc7B3DCEe785](https://etherscan.io/address/0xA74Cc5c431531Bf2601250C52825dc7B3DCEe785)
+
+- goerli: [0xbDacE4d9b9bA1E43cAddFf455D4d91FE48D17785](https://goerli.etherscan.io/address/0xbdace4d9b9ba1e43caddff455d4d91fe48d17785)
+
 ## Disclaimer
 
 This is experimental contract, not yet audited.
