@@ -8,7 +8,8 @@
 
 ### Detailed steps inside `migrateFromUniV3WithPermit`
 
-1. Call `permit` from Uniswap V3 to approve this contract to "spend" the position. It also act as token owner verification to prevent other people to migrate the position without a correct signature.
+1. Call `permit` from Uniswap V3 to approve this contract to "spend" the position.<br>
+   It also act as token owner verification to prevent other people to migrate the position without a correct signature.
 
 1. Get `token0` and `token1` address from the position.
 
@@ -29,3 +30,7 @@
 
 - You should only deposit liquidity into Muffin at a price you believe is correct.<br>
   If the price seems incorrect, you can either make a swap to move the price or wait for someone else to do so.
+
+## Disclaimer
+
+This is experimental contract, not yet audited.
